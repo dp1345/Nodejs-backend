@@ -1,0 +1,52 @@
+name: Deploy to ECR
+
+on:
+ 
+  push:
+    branches: [ main ]
+
+jobs:
+  
+  build:
+    
+    name: Build Image
+    runs-on: ubuntu-latest
+
+   
+    steps:
+
+    - name: Check out code
+      uses: actions/checkout@v2
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.ACCESSID }}
+        aws-secret-access-key: ${{ secrets.SECRETKEY }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Retrieve .env from S3
+      run: |
+        aws s3 cp s3://carebidsexchange.com/supplierapi/.env ./.env
+
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: supplierapi
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+    
+    - name: SSH into server and execute script
+      uses: appleboy/ssh-action@master
+      with:
+        host: 3.83.98.82
+        username: ubuntu
+        key: ${{ secrets.SERVERKEY }} # Assuming you have stored the private key as a secret
+        script: |
+          bash /home/ubuntu/scripts/supplierapi.sh
